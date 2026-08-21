@@ -134,3 +134,20 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Python / Backend
+server/.venv/
+server/__pycache__/
+server/*.pyc
+server/.env
+
+# Node / Frontend
+client/node_modules/
+client/dist/
+client/.env
+
+# Editor
+.DS_Store
+.vscode/
+.idea/
+notes.txt

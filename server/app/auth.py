@@ -1,0 +1,1 @@
+# Authentication with Steam API. Will be mock data first.

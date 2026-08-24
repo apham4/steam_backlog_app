@@ -24,13 +24,13 @@ def get_current_user(db: Session = Depends(get_db)) -> models.User:
             username = settings.DEV_USERNAME,
             avatar_url = "",
         )
-        # db.add(user)
+        db.add(user)
 
         # With default user settings
         user_settings = models.UserSettings(user_id = user.id)
-        # db.add(user)
+        db.add(user_settings)
         
-        # db.commit()
-        # db.refresh(user)
+        db.commit()
+        db.refresh(user)
     
     return user

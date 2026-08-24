@@ -26,7 +26,9 @@ app.add_middleware(
 
 # region User Endpoints
 @app.get("/api/me", response_model = schemas.UserOut)
-def get_current_user(current_user: models.User = Depends(auth.get_current_user)):
+def get_current_user(
+    current_user: models.User = Depends(auth.get_current_user)
+):
     """Get the currently authenticated user."""
     return current_user
 
@@ -34,7 +36,11 @@ def get_current_user(current_user: models.User = Depends(auth.get_current_user))
 
 # region User Settings Endpoints
 @app.put("/api/settings", response_model = schemas.UserSettingsOut)
-def update_user_settings(settings_data: schemas.UserSettingsUpdate, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
+def update_user_settings(
+    settings_data: schemas.UserSettingsUpdate, 
+    current_user: models.User = Depends(auth.get_current_user), 
+    db: Session = Depends(database.get_db)
+):
     """Update the currently authenticated user's settings (thresholds preferences)."""
 
     user_settings = db.query(models.UserSettings).filter(models.UserSettings.user_id == current_user.id).first()
@@ -86,7 +92,11 @@ def get_exclusions(
 
 
 @app.post("/api/exclusions", response_model = schemas.ExclusionOut)
-def create_exclusion(exclusion_data: schemas.ExclusionCreate, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
+def create_exclusion(
+    exclusion_data: schemas.ExclusionCreate, 
+    current_user: models.User = Depends(auth.get_current_user), 
+    db: Session = Depends(database.get_db)
+):
     """Create an exclusion entry (when user skips a recommended game) for the currently authenticated user."""
 
     cooldown_days = exclusion_data.cooldown_days if exclusion_data.cooldown_days else current_user.settings.skip_cooldown_days

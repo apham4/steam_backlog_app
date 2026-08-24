@@ -1,8 +1,9 @@
 # Database operations, SessionLocal
 
-from app.config import settings
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
+
+from app.config import settings
 
 # SQLAlchemy engine. The core connection to PostgreSQL.
 engine = create_engine(

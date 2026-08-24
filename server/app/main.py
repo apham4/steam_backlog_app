@@ -26,7 +26,7 @@ app.add_middleware(
 
 # region User Endpoints
 @app.get("/api/me", response_model = schemas.UserOut)
-def get_current_user(
+def get_me(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     """Get the currently authenticated user."""

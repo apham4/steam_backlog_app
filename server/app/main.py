@@ -1,6 +1,6 @@
 # FastAPI entrypoint and API CRUD endpoints.
 
-import datetime
+from datetime import datetime, timedelta, timezone
 from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -23,19 +23,13 @@ app.add_middleware(
     allow_headers = settings.CORS_HEADERS,
 )
 
-# test
-@app.get("/api/health")
-def health_check():
-    return {
-        "status": "ok",
-        "message": "FastAPI Backend is running."
-    }
 
 # region User Endpoints
 @app.get("/api/me", response_model = schemas.UserOut)
 def get_current_user(current_user: models.User = Depends(auth.get_current_user)):
     """Get the currently authenticated user."""
     return current_user
+
 # endregion
 
 # region User Settings Endpoints
@@ -55,19 +49,41 @@ def update_user_settings(settings_data: schemas.UserSettingsUpdate, current_user
     db.commit()
     db.refresh(user_settings)
     return user_settings
+
 # endregion
 
 # region Exclusion Endpoints
+def cleanup_expired_exclusions():
+    """Helper background task to delete expired exclusions from the database."""
+    # This needs its own SessionLocal instance because it's an async background task. The session from the caller may be out of scope and closed by the time this runs.
+    db = database.SessionLocal()
+    try:
+        db.query(models.Exclusion).filter(
+            models.Exclusion.expires_at <= datetime.now(timezone.utc)
+        ).delete()
+        db.commit()
+    finally:
+        db.close()
+
+
+# FastAPI automatically injects the BackgroundTasks instance into the endpoint function.
 @app.get("/api/exclusions", response_model = List[schemas.ExclusionOut])
-def get_exclusions(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
-    """Get the currently authenticated user's exclusion list."""
+def get_exclusions(
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db),
+):
+    """Get the currently authenticated user's exclusion list and also trigger cleanup of expired exclusions."""
+
+    background_tasks.add_task(cleanup_expired_exclusions)
 
     exclusions = db.query(models.Exclusion).filter(
         models.Exclusion.user_id == current_user.id,
-        models.Exclusion.expires_at > datetime.now(datetime.timezone.utc),
+        models.Exclusion.expires_at > datetime.now(timezone.utc),
     ).all()
 
     return exclusions
+
 
 @app.post("/api/exclusions", response_model = schemas.ExclusionOut)
 def create_exclusion(exclusion_data: schemas.ExclusionCreate, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(database.get_db)):
@@ -78,7 +94,7 @@ def create_exclusion(exclusion_data: schemas.ExclusionCreate, current_user: mode
     exclusion = models.Exclusion(
         user_id = current_user.id,
         app_id = exclusion_data.app_id,
-        expires_at = datetime.now(datetime.timezone.utc) + datetime.timedelta(days = cooldown_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days = cooldown_days)
     )
 
     db.add(exclusion)
@@ -86,4 +102,5 @@ def create_exclusion(exclusion_data: schemas.ExclusionCreate, current_user: mode
     db.refresh(exclusion)
 
     return exclusion
+
 # endregion

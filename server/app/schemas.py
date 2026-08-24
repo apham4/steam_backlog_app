@@ -17,8 +17,10 @@ class UserSettingsBase(BaseModel):
     recent_threshold_mins: int = 60
     skip_cooldown_days: int = 3
 
+
 class UserSettingsUpdate(UserSettingsBase):
     pass # all needed fields are in UserSettingsBase
+
 
 class UserSettingsOut(UserSettingsBase):
     model_config = ConfigDict(from_attributes = True) # allows Pydantic to read from SQLAlchemy model attributes
@@ -29,8 +31,10 @@ class UserSettingsOut(UserSettingsBase):
 class ExclusionBase(BaseModel):
     app_id: int
 
+
 class ExclusionCreate(ExclusionBase):
     cooldown_days: Optional[int] = 3
+
 
 class ExclusionOut(ExclusionBase):
     id: int
@@ -38,6 +42,7 @@ class ExclusionOut(ExclusionBase):
     expires_at: datetime
 
     model_config = ConfigDict(from_attributes = True)
+
 # endregion
 
 # region User Schemas
@@ -60,6 +65,7 @@ class GamesCacheBase(BaseModel):
     review_score: Optional[int] = None
     total_reviews: Optional[int] = None
     review_score_desc: Optional[str] = None
+
 
 class GamesCacheOut(GamesCacheBase):
     last_fetched: datetime # technically not needed but useful for debugging.

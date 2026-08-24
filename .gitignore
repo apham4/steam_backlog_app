@@ -138,6 +138,7 @@ dist
 # Python / Backend
 server/.venv/
 server/__pycache__/
+server/app/__pycache__/
 server/*.pyc
 server/.env
 

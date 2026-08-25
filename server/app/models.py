@@ -1,8 +1,9 @@
 # SQLAlchemy ORM database models.
 
 from datetime import datetime, timezone
-from sqlalchemy import Column, ForeignKey, Integer, String, DateTime
+from sqlalchemy import Column, ForeignKey, func, Integer, String, DateTime, Text
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.database import Base
 
@@ -14,7 +15,7 @@ class User(Base):
     steam_id = Column(String(64), unique = True, index = True, nullable = False)
     username = Column(String(255), nullable = False)
     avatar_url = Column(String(512), nullable = True)
-    created_at = Column(DateTime(timezone = True), default = datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone = True), server_default = func.now())
 
     # Relationships
     settings = relationship("UserSettings", back_populates = "user", uselist = False)
@@ -46,7 +47,7 @@ class Exclusion(Base):
     id = Column(Integer, primary_key = True, index = True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable = False, index = True)
     app_id = Column(Integer, nullable = False, index = True)
-    created_at = Column(DateTime(timezone = True), default = datetime.now(timezone.utc), nullable = False, index = True) # does this need indexing?
+    created_at = Column(DateTime(timezone = True), server_default = func.now(), nullable = False)
     expires_at = Column(DateTime(timezone = True), nullable = False, index = True) # created_at + UserSettings.skip_cooldown_days.
 
     # Relationships
@@ -63,4 +64,9 @@ class GamesCache(Base):
     review_score = Column(Integer, nullable = True) # Internal Steam scale corresponding to review_score_desc.
     total_reviews = Column(Integer, nullable = True)
     review_score_desc = Column(String(255), nullable = True) # Human-readable desc like "Very Positive" or "Mixed"
-    last_fetched = Column(DateTime(timezone = True), default = datetime.now(timezone.utc), nullable = False)
+    developers = Column(JSONB, default = list, nullable = True) # ["Developer1", "Developer2", ...]
+    publishers = Column(JSONB, default = list, nullable = True) # ["Publisher1", "Publisher2", ...]
+    short_description = Column(Text, nullable = True)
+    categories = Column(JSONB, default = list, nullable = False) # ["Single-player", "Multi-player", "Co-op", "Family Sharing", ...]
+    genres = Column(JSONB, default = list, nullable = False) # ["Action", "Adventure", "RPG", "Strategy", "Simulation", ...]
+    last_fetched = Column(DateTime(timezone = True), server_default = func.now(), nullable = False)

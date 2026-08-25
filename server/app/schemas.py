@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
+from app.config import settings
+
 # Naming conventions for class suffixes:
 # Base: parent class containing attributes shared across creation, updates, responses.
 # Create: defines the data contract required from client for creating a new resource. Excludes server-managed fields (id, created_at) and can require certain fields.
@@ -13,9 +15,9 @@ from pydantic import BaseModel, ConfigDict
 
 # region UserSettings Schemas
 class UserSettingsBase(BaseModel):
-    backlog_threshold_mins: int = 60
-    recent_threshold_mins: int = 60
-    skip_cooldown_days: int = 3
+    backlog_threshold_mins: int = settings.BACKLOG_THRESHOLD_MINS
+    recent_threshold_mins: int = settings.RECENT_THRESHOLD_MINS
+    skip_cooldown_days: int = settings.SKIP_COOLDOWN_DAYS
 
 
 class UserSettingsUpdate(UserSettingsBase):
@@ -33,12 +35,12 @@ class ExclusionBase(BaseModel):
 
 
 class ExclusionCreate(ExclusionBase):
-    cooldown_days: Optional[int] = 3
+    pass
 
 
 class ExclusionOut(ExclusionBase):
     id: int
-    excluded_at: datetime
+    created_at: datetime
     expires_at: datetime
 
     model_config = ConfigDict(from_attributes = True)
@@ -52,7 +54,7 @@ class UserOut(BaseModel):
     steam_id: str
     username: str
     avatar_url: Optional[str] = None
-    settings: UserSettingsOut = None
+    settings: Optional[UserSettingsOut] = None
     # we don't need exclusions here because that's only for getting recommendations, and it has its own endpoint.
 
 #endregion
@@ -65,6 +67,11 @@ class GamesCacheBase(BaseModel):
     review_score: Optional[int] = None
     total_reviews: Optional[int] = None
     review_score_desc: Optional[str] = None
+    developers: Optional[List[str]] = None
+    publishers: Optional[List[str]] = None
+    short_description: Optional[str] = None
+    categories: List[str] = []
+    genres: List[str] = []
 
 
 class GamesCacheOut(GamesCacheBase):

@@ -117,7 +117,7 @@ def create_exclusion(
 # endregion
 
 # region Steam Integration Endpoints
-@app.get("/api/steam/library")
+@app.get("/api/steam/library", response_model = schemas.SteamLibraryOut)
 async def get_steam_library(
     current_user: models.User = Depends(auth.get_current_user),
 ):

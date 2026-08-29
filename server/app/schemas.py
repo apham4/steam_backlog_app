@@ -57,7 +57,7 @@ class UserOut(BaseModel):
     settings: Optional[UserSettingsOut] = None
     # we don't need exclusions here because that's only for getting recommendations, and it has its own endpoint.
 
-#endregion
+# endregion
 
 # region Games Cache Schemas
 class GamesCacheBase(BaseModel):
@@ -79,4 +79,20 @@ class GamesCacheOut(GamesCacheBase):
 
     model_config = ConfigDict(from_attributes = True)
 
-#endregion
+# endregion
+
+# region Steam Library Schemas
+# Not a model but useful as a data struct for specifying the shape of response data. Also useful for Swagger UI to know what return data shape to expect.
+class SteamOwnedGame(BaseModel):
+    appid: int
+    name: str
+    playtime_forever: int
+    playtime_2weeks: Optional[int] = 0
+
+
+class SteamLibraryOut(BaseModel):
+    total_owned: int
+    backlog: List[SteamOwnedGame]
+    recently_played: List[SteamOwnedGame]
+
+# endregion

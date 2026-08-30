@@ -73,11 +73,11 @@ class GamesCacheBase(BaseModel):
     categories: List[str] = []
     genres: List[str] = []
 
+    model_config = ConfigDict(from_attributes = True)
+
 
 class GamesCacheOut(GamesCacheBase):
     last_fetched: datetime # technically not needed but useful for debugging.
-
-    model_config = ConfigDict(from_attributes = True)
 
 # endregion
 
@@ -94,5 +94,17 @@ class SteamLibraryOut(BaseModel):
     total_owned: int
     backlog: List[SteamOwnedGame]
     recently_played: List[SteamOwnedGame]
+
+# endregion
+
+# region Recommendation Schemas
+# Same as above
+class RecommendationOut(BaseModel):
+    game_details: GamesCacheBase
+    store_url: str
+    trailer_search_url: str
+    
+    matched_genres: List[str] = []
+    recent_games_referenced: List[str] = []
 
 # endregion

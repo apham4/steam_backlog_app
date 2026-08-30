@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     STEAM_FETCH_APP_REVIEWS_URL: str = "https://store.steampowered.com/api/appreviews/{app_id}"
     STEAM_API_KEY: str = ""
     STEAM_API_TIMEOUT_SECONDS: int = 10
+    STEAM_API_MAX_FETCH_LIMIT: int = 10
     DEV_STEAM_ID: str = ""
     DEV_USERNAME: str = ""
 
@@ -26,6 +27,13 @@ class Settings(BaseSettings):
     BACKLOG_THRESHOLD_MINS: int = 60
     RECENT_THRESHOLD_MINS: int = 120
     SKIP_COOLDOWN_DAYS: int = 3
+    GAME_SCORE_GENRE_WEIGHT: float = 0.65
+    GAME_SCORE_REVIEW_WEIGHT: float = 0.35
+
+    # Button Links
+    STEAM_STORE_GAME_URL: str = "https://store.steampowered.com/app/{app_id}"
+    TRAILER_SEARCH_PHRASE: str = "{app_name} official game trailer"
+    TRAILER_SEARCH_URL: str = "https://www.youtube.com/results?search_query={search_phrase}"
 
     model_config = SettingsConfigDict(env_file = ".env", extra = "ignore")
 

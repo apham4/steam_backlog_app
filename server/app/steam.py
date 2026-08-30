@@ -3,6 +3,8 @@
 import asyncio
 import html
 import httpx
+import random
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional
@@ -10,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from app import models
 from app.config import settings
 
+# region Library Owned Games
 async def fetch_owned_games(steam_id: str) -> List[Dict[str, Any]]:
     """Fetch the list of owned games for a given Steam ID using the Steam Web API."""
     url = settings.STEAM_GET_OWNED_GAMES_URL
@@ -33,6 +36,41 @@ async def fetch_owned_games(steam_id: str) -> List[Dict[str, Any]]:
         return response.json().get("response", {}).get("games", [])
 
 
+@dataclass
+class GameLibraryDetails:
+    total_owned: int
+    backlog: List[Dict[str, Any]]
+    recently_played: List[Dict[str, Any]]
+
+# Haven't figured out what's a good way to specify the output type of this function yet.
+async def get_game_library_details(current_user: models.User) -> Optional[GameLibraryDetails]:
+    """Get user's library details and specify out backlog and recently played games."""
+    library = await fetch_owned_games(current_user.steam_id)
+    if not library:
+        return None
+
+    backlog_threshold = current_user.settings.backlog_threshold_mins
+    recent_threshold = current_user.settings.recent_threshold_mins
+    
+    backlog_list = []
+    recently_played_list = []
+    
+    for game in library:
+        if game.get("playtime_2weeks", 0) >= recent_threshold:
+            recently_played_list.append(game)
+            continue # If a game is already added as recently played, don't mark it as backlog.
+        if game.get("playtime_forever", float('inf')) <= backlog_threshold:
+            backlog_list.append(game)
+
+    return GameLibraryDetails(
+        total_owned = len(library),
+        backlog = backlog_list,
+        recently_played = recently_played_list,
+    )
+
+# endregion
+
+# region Game Details
 async def fetch_game_details_from_steam(in_app_id: int) -> Optional[Dict[str, Any]]:
     """Fetch detailed information for a specific game using the Steam Web API."""
     game_details_url = settings.STEAM_FETCH_APP_DETAILS_URL
@@ -100,20 +138,61 @@ async def fetch_game_details_from_steam(in_app_id: int) -> Optional[Dict[str, An
         }
 
 
-async def get_game_details(app_id: int, db: Session) -> Optional[models.GamesCache]:
-    """Get game details for the given app id. Look at db cache first. If there's none or cache expired, fetch from Steam API."""
+async def get_games_details_batch(
+    app_ids: List[int],
+    db: Session,
+) -> List[models.GamesCache]:
+    """
+    First, a single database query to get all cache-hit games.
+    Then, among the cache misses/stale, it randomly samples up to the fetch max limit (defined in settings) to fetch from Steam.
+    After that, save the new game details to cache with 1 database query.
+    """
 
-    cached_game = db.query(models.GamesCache).filter(models.GamesCache.app_id == app_id).first()
+    if len(app_ids) == 0:
+        return []
 
-    if cached_game and cached_game.last_fetched + timedelta(days = settings.GAME_CACHE_TTL_DAYS) >= datetime.now(timezone.utc):
-        # cache hit
-        return cached_game
+    # If a game cache was made before this cutoff, it is stale
+    freshness_cutoff = datetime.now(timezone.utc) - timedelta(days = settings.GAME_CACHE_TTL_DAYS)
 
-    # else, fetch from steam and save to cache
-    game_details = await fetch_game_details_from_steam(app_id)
-    if game_details:
+    existing_records = db.query(models.GamesCache).filter(models.GamesCache.app_id.in_(app_ids)).all()
+    records_by_id = {record.app_id: record for record in existing_records} # Make it an id -> cache record map
+
+    # Identify cache hits and misses
+    cache_hits: List[models.GamesCache] = []
+    cache_misses_ids: List[int] = []
+
+    for id in app_ids:
+        record = records_by_id.get(id)
+        if record and record.last_fetched >= freshness_cutoff:
+            cache_hits.append(record)
+        else:
+            cache_misses_ids.append(id)
+
+    # Randomly sample if needed
+    if len(cache_misses_ids) > settings.STEAM_API_MAX_FETCH_LIMIT:
+        cache_misses_ids = random.sample(cache_misses_ids, settings.STEAM_API_MAX_FETCH_LIMIT)
+
+    # If no misses then just return the hits
+    if len(cache_misses_ids) == 0:
+        return cache_hits
+
+    # Get game details from Steam API async
+    # The * is the syntax for unpacking. Basically calling gather(game1, game2, game3, ...)
+    fetched_results = await asyncio.gather(
+        *[fetch_game_details_from_steam(id) for id in cache_misses_ids],
+        return_exceptions = True
+    )
+
+    # Insert into db
+    for game_details in fetched_results:
+        if not game_details or isinstance(game_details, Exception):
+            continue
+
+        app_id = game_details["app_id"]
+        cached_game = records_by_id.get(app_id)
+
         if cached_game:
-            # Resource exists but stale
+            # Has cache record but stale, needs updating
             cached_game.name = game_details["name"]
             cached_game.image_url = game_details["image_url"]
             cached_game.review_score = game_details["review_score"]
@@ -143,7 +222,9 @@ async def get_game_details(app_id: int, db: Session) -> Optional[models.GamesCac
             )
             db.add(cached_game)
 
-        db.commit()
-        db.refresh(cached_game)
+        cache_hits.append(cached_game)
 
-    return cached_game
+    db.commit()
+    return cache_hits
+    
+# endregion

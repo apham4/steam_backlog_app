@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
 
-from app import auth, database, models, schemas, steam
+from app import auth, database, models, recommender, schemas, steam
 from app.config import settings
 from app.database import Base, engine
 
@@ -72,6 +72,24 @@ def cleanup_expired_exclusions():
         db.close()
 
 
+def get_exclusions_with_cleanup(
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db),
+) -> List[models.Exclusion]:
+    """Helper function to get the currently authenticated user's exclusion list and also trigger cleanup of expired exclusions."""
+    # This originally happened directly in get_exclusions endpoint, but got split out to be reused by get_next_recommendation
+    
+    exclusions = db.query(models.Exclusion).filter(
+        models.Exclusion.user_id == current_user.id,
+        models.Exclusion.expires_at > datetime.now(timezone.utc),
+    ).all()
+
+    background_tasks.add_task(cleanup_expired_exclusions)
+    
+    return exclusions
+
+
 # FastAPI automatically injects the BackgroundTasks instance into the endpoint function.
 @app.get("/api/exclusions", response_model = List[schemas.ExclusionOut])
 def get_exclusions(
@@ -80,15 +98,7 @@ def get_exclusions(
     db: Session = Depends(database.get_db),
 ):
     """Get the currently authenticated user's exclusion list and also trigger cleanup of expired exclusions."""
-
-    background_tasks.add_task(cleanup_expired_exclusions)
-
-    exclusions = db.query(models.Exclusion).filter(
-        models.Exclusion.user_id == current_user.id,
-        models.Exclusion.expires_at > datetime.now(timezone.utc),
-    ).all()
-
-    return exclusions
+    return get_exclusions_with_cleanup(background_tasks, current_user, db)
 
 
 @app.post("/api/exclusions", response_model = schemas.ExclusionOut)
@@ -123,30 +133,18 @@ async def get_steam_library(
 ):
     """Fetch the authenticated user's Steam game library, specifically their backlog games and their recently played games."""
 
-    library = await steam.fetch_owned_games(current_user.steam_id)
-    if not library:
+    library_details: steam.GameLibraryDetails = await steam.get_game_library_details(current_user)
+    if not library_details:
         raise HTTPException(
             status_code = 404, detail = "No games found or the library is private for the given user."
         )
 
-    backlog_threshold = current_user.settings.backlog_threshold_mins
-    recent_threshold = current_user.settings.recent_threshold_mins
-
-    backlog_list = []
-    recently_played_list = []
-
-    for game in library:
-        if game.get("playtime_2weeks", 0) >= recent_threshold:
-            recently_played_list.append(game)
-            continue # If a game is already added as recently played, don't mark it as backlog.
-        if game.get("playtime_forever", float('inf')) <= backlog_threshold:
-            backlog_list.append(game)
-
-    return {
-        "total_owned": len(library),
-        "backlog": backlog_list,
-        "recently_played": recently_played_list,
-    }
+    steam_library = schemas.SteamLibraryOut(
+        total_owned = library_details.total_owned,
+        backlog = library_details.backlog,
+        recently_played = library_details.recently_played,
+    )
+    return steam_library
 
 
 @app.get("/api/steam/game/{app_id}", response_model = schemas.GamesCacheOut)
@@ -156,11 +154,40 @@ async def get_steam_game_details(
 ):
     """Fetch game details given Steam App ID."""
 
-    game_cache = await steam.get_game_details(app_id, db)
-    if not game_cache:
+    game_cache = await steam.get_games_details_batch([app_id], db)
+    if not game_cache or not game_cache[0]:
         raise HTTPException(
             status_code = 404, detail = "Game not found or is software or DLC."
         )
-    return game_cache
+    return game_cache[0]
+
+# TODO: A cache warm up call for backlog and recent games when the user logs in
+# endregion
+
+# region Recommendation Endpoints
+@app.get("/api/recommendation/get", response_model = schemas.RecommendationOut)
+async def get_next_recommendation(
+    background_tasks: BackgroundTasks,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db),
+):
+    """Get user's library details, take into account exclusions, return a backlog recommendation."""
+
+    exclusions: List[models.Exclusion] = get_exclusions_with_cleanup(background_tasks, current_user, db)
+    library_details: steam.GameLibraryDetails = await steam.get_game_library_details(current_user)
+
+    recommendation_data: recommender.RecommendationData = await recommender.get_top_recommendation(library_details, exclusions, db)
+    if not recommendation_data:
+        raise HTTPException(
+            status_code = 404, detail = "Could not generate a recommendation. Make sure backlog has at least one game."
+        )
+
+    return schemas.RecommendationOut(
+        game_details = recommendation_data.game_details,
+        store_url = recommendation_data.store_url,
+        trailer_search_url = recommendation_data.trailer_search_url,
+        recent_games_referenced = recommendation_data.recent_games_referenced,
+        matched_genres = recommendation_data.matched_genres,
+    )
 
 # endregion

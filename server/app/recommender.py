@@ -1,6 +1,6 @@
 # Recommender engine to gather details and come up with a backlog recommendation.
 
-import asyncio
+import urllib.parse
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional, Set
@@ -58,8 +58,11 @@ def score_game(
             genre_score += genre_weights[genre]
             matched_genres.append(genre)
 
+    # Need to normalize review_score (1-9) as well because genre_score is normalized to 0.0-1.0.
+    # Divide by 9, then clamp it between 0 and 1.
     review_score = game.review_score or 0
-    composite_score = (genre_score * settings.GAME_SCORE_GENRE_WEIGHT) + (review_score * settings.GAME_SCORE_REVIEW_WEIGHT)
+    normalized_review_score = min(max(review_score / 9.0, 0.0), 1.0)
+    composite_score = (genre_score * settings.GAME_SCORE_GENRE_WEIGHT) + (normalized_review_score * settings.GAME_SCORE_REVIEW_WEIGHT)
 
     return GameScoreData(
         score = composite_score,
@@ -125,8 +128,9 @@ async def get_top_recommendation(
     best_match = scored_games[0]
 
     store_url = settings.STEAM_STORE_GAME_URL.format(app_id = best_match["game"].app_id)
-    trailer_search_phrase = settings.TRAILER_SEARCH_PHRASE.format(app_name = best_match["game"].name)
-    trailer_search_url = settings.TRAILER_SEARCH_URL.format(search_phrase = trailer_search_phrase)
+    raw_trailer_search_phrase = settings.TRAILER_SEARCH_PHRASE.format(app_name = best_match["game"].name)
+    encoded_trailer_search_phrase = urllib.parse.quote_plus(raw_trailer_search_phrase)
+    trailer_search_url = settings.TRAILER_SEARCH_URL.format(search_phrase = encoded_trailer_search_phrase)
 
     return RecommendationData(
         game_details = best_match["game"],

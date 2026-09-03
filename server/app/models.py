@@ -1,11 +1,11 @@
 # SQLAlchemy ORM database models.
 
-from datetime import datetime, timezone
 from sqlalchemy import Column, ForeignKey, func, Integer, String, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.database import Base
+from app.config import settings
 
 class User(Base):
     __tablename__ = "users"
@@ -32,9 +32,9 @@ class UserSettings(Base):
     # user_settings schema
     id = Column(Integer, primary_key = True, index = True)
     user_id = Column(Integer, ForeignKey("users.id"), unique = True, nullable = False)
-    backlog_threshold_mins = Column(Integer, default = 60) # max playtime in minutes for a game to be considered backlog.
-    recent_threshold_mins = Column(Integer, default = 60) # min playtime in minutes for a game to be considered recently played.
-    skip_cooldown_days = Column(Integer, default = 3) # when a recommendation is skipped, how long until it can be recommended again.
+    backlog_threshold_mins = Column(Integer, default = settings.BACKLOG_THRESHOLD_MINS) # max playtime in minutes for a game to be considered backlog.
+    recent_threshold_mins = Column(Integer, default = settings.RECENT_THRESHOLD_MINS) # min playtime in minutes for a game to be considered recently played.
+    skip_cooldown_days = Column(Integer, default = settings.SKIP_COOLDOWN_DAYS) # when a recommendation is skipped, how long until it can be recommended again.
 
     # Relationships
     user = relationship("User", back_populates = "settings")

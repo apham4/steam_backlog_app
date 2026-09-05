@@ -2,6 +2,7 @@
 // TypeScript is JavaScript + extras, so it needs compiling into JS before running in browser.
 // These are the shape of objects to be used, related to the API endpoints defined in the FastAPI backend.
 
+// export means it can be imported and used in other files (public?)
 export interface UserSettings {
     backlog_threshold_mins: number;
     recent_threshold_mins: number;

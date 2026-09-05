@@ -6,6 +6,7 @@ import httpx
 import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional
 
@@ -154,77 +155,74 @@ async def get_games_details_batch(
     # If a game cache was made before this cutoff, it is stale
     freshness_cutoff = datetime.now(timezone.utc) - timedelta(days = settings.GAME_CACHE_TTL_DAYS)
 
-    existing_records = db.query(models.GamesCache).filter(models.GamesCache.app_id.in_(app_ids)).all()
+    unique_app_ids = list(dict.fromkeys(app_ids)) # deduplicate
+    existing_records = db.query(models.GamesCache).filter(models.GamesCache.app_id.in_(unique_app_ids)).all()
     records_by_id = {record.app_id: record for record in existing_records} # Make it an id -> cache record map
 
     # Identify cache hits and misses
-    cache_hits: List[models.GamesCache] = []
     cache_misses_ids: List[int] = []
 
-    for id in app_ids:
+    for id in unique_app_ids:
         record = records_by_id.get(id)
-        if record and record.last_fetched >= freshness_cutoff:
-            cache_hits.append(record)
-        else:
+        if not record or record.last_fetched < freshness_cutoff:
             cache_misses_ids.append(id)
 
-    # Randomly sample if needed
+    # Randomly sample if needed. Only fetch up to STEAM_API_MAX_FETCH_LIMIT
     if len(cache_misses_ids) > settings.STEAM_API_MAX_FETCH_LIMIT:
         cache_misses_ids = random.sample(cache_misses_ids, settings.STEAM_API_MAX_FETCH_LIMIT)
 
-    # If no misses then just return the hits
-    if len(cache_misses_ids) == 0:
-        return cache_hits
+    if len(cache_misses_ids) > 0:
+        # Get game details from Steam API async
+        # The * is the syntax for unpacking. Basically calling gather(game1, game2, game3, ...)
+        fetched_results = await asyncio.gather(
+            *[fetch_game_details_from_steam(id) for id in cache_misses_ids],
+            return_exceptions = True
+        )
 
-    # Get game details from Steam API async
-    # The * is the syntax for unpacking. Basically calling gather(game1, game2, game3, ...)
-    fetched_results = await asyncio.gather(
-        *[fetch_game_details_from_steam(id) for id in cache_misses_ids],
-        return_exceptions = True
-    )
+        # Build deduplicated upsert payload
+        # Upsert = update if existing, create new if not
+        upsert_rows = {}
+        for game_details in fetched_results:
+            if not game_details or isinstance(game_details, Exception):
+                continue
+            upsert_rows[game_details["app_id"]] = {
+                "app_id": game_details["app_id"],
+                "name": game_details["name"],
+                "image_url": game_details["image_url"],
+                "review_score": game_details["review_score"],
+                "total_reviews": game_details["total_reviews"],
+                "review_score_desc": game_details["review_score_desc"],
+                "developers": game_details["developers"],
+                "publishers": game_details["publishers"],
+                "short_description": game_details["short_description"],
+                "categories": game_details["categories"],
+                "genres": game_details["genres"],
+                "last_fetched": datetime.now(timezone.utc),
+            }
 
-    # Insert into db
-    for game_details in fetched_results:
-        if not game_details or isinstance(game_details, Exception):
-            continue
-
-        app_id = game_details["app_id"]
-        cached_game = records_by_id.get(app_id)
-
-        if cached_game:
-            # Has cache record but stale, needs updating
-            cached_game.name = game_details["name"]
-            cached_game.image_url = game_details["image_url"]
-            cached_game.review_score = game_details["review_score"]
-            cached_game.total_reviews = game_details["total_reviews"]
-            cached_game.review_score_desc = game_details["review_score_desc"]
-            cached_game.developers = game_details["developers"]
-            cached_game.publishers = game_details["publishers"]
-            cached_game.short_description = game_details["short_description"]
-            cached_game.categories = game_details["categories"]
-            cached_game.genres = game_details["genres"]
-            cached_game.last_fetched = datetime.now(timezone.utc)
-        else:
-            # Resource doesn't exist, make a new one.
-            cached_game = models.GamesCache(
-                app_id = game_details["app_id"],
-                name = game_details["name"],
-                image_url = game_details["image_url"],
-                review_score = game_details["review_score"],
-                total_reviews = game_details["total_reviews"],
-                review_score_desc = game_details["review_score_desc"],
-                developers = game_details["developers"],
-                publishers = game_details["publishers"],
-                short_description = game_details["short_description"],
-                categories = game_details["categories"],
-                genres = game_details["genres"],
-                last_fetched = datetime.now(timezone.utc),
+        # Run the upsert on db
+        if len(upsert_rows) > 0:
+            statement = postgresql_insert(models.GamesCache).values(list(upsert_rows.values()))
+            upsert_statement = statement.on_conflict_do_update(
+                index_elements = [models.GamesCache.app_id],
+                set_ = {
+                    "name": statement.excluded.name,
+                    "image_url": statement.excluded.image_url,
+                    "review_score": statement.excluded.review_score,
+                    "total_reviews": statement.excluded.total_reviews,
+                    "review_score_desc": statement.excluded.review_score_desc,
+                    "developers": statement.excluded.developers,
+                    "publishers": statement.excluded.publishers,
+                    "short_description": statement.excluded.short_description,
+                    "categories": statement.excluded.categories,
+                    "genres": statement.excluded.genres,
+                    "last_fetched": statement.excluded.last_fetched,
+                }
             )
-            db.add(cached_game)
+            db.execute(upsert_statement)
+            db.commit()
 
-        cache_hits.append(cached_game)
-
-    db.commit()
-    return cache_hits
+    # Return all available cached games for the requested IDs
+    return db.query(models.GamesCache).filter(models.GamesCache.app_id.in_(unique_app_ids)).all()
     
 # endregion

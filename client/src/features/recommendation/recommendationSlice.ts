@@ -4,6 +4,7 @@ import type { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import type { Recommendation } from '../../types/api';
 import { apiClient } from '../../api/client';
+import { config } from '../../config';
 
 interface RecommendationState {
     currentRecommendation: Recommendation | null;
@@ -23,7 +24,7 @@ export const fetchNextRecommendation = createAsyncThunk(
     'recommendation/fetchNext', // name to call by 
     async (_, { rejectWithValue }) => { // The _ is for params to pass in.
         try {
-            const response = await apiClient.get<Recommendation>('api/recommendation/get'); // TODO: maybe config here?
+            const response = await apiClient.get<Recommendation>(config.api.endpoints.getRecommendation);
             return response.data;
         } catch (error: any) {
             return rejectWithValue(
@@ -38,7 +39,7 @@ export const skipRecommendation = createAsyncThunk(
     'recommendation/skip',
     async (appId: number, { dispatch, rejectWithValue }) => { // dispatch is for calling another async thunk i guess.
         try {
-            await apiClient.post('api/exclusions', { app_id: appId });
+            await apiClient.post(config.api.endpoints.addExclusion, { app_id: appId });
             // Call to get the next recommendation immediately (what for?)
             dispatch(fetchNextRecommendation());
         } catch (error: any) {

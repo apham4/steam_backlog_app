@@ -1,12 +1,14 @@
 # FastAPI entrypoint and API CRUD endpoints.
 
+import urllib.parse
 from datetime import datetime, timedelta, timezone
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from typing import List
 
-from app import auth, database, models, recommender, schemas, steam
+from app import auth, database, models, recommender, schemas, security, steam
 from app.config import settings
 from app.database import Base, engine
 
@@ -17,12 +19,78 @@ app = FastAPI(title = settings.APP_NAME)
 
 app.add_middleware(
     CORSMiddleware, # CORS to allow React frontend to talk to FastAPI app
-    allow_origins = settings.CORS_ORIGINS,
+    allow_origins = [settings.CLIENT_ORIGIN_URL],
     allow_credentials = True,
     allow_methods = settings.CORS_METHODS,
     allow_headers = settings.CORS_HEADERS,
 )
 
+
+# region Steam Authentication Endpoints
+@app.get("/api/auth/login")
+def login_with_steam(request: Request):
+    """Constructs OpenID 2.0 query and redirects browser to Steam's login gateway."""
+
+    # Look at the comments in security.py detailing how all the redirection works.
+
+    # Dynamically generate the callback URL based on the auth_callback endpoint
+    callback_url = str(request.url_for("auth_callback"))
+    realm = f"{request.url.scheme}://{request.url.netloc}" # The root origin domain of the backend app so that Steam can show it on their login page. return_to must be in the same domain.
+
+    # theres no way i know all these lole
+    openid_params = {
+        "openid.ns": "http://specs.openid.net/auth/2.0", # OpenID namespace
+        "openid.mode": "checkid_setup",
+        "openid.return_to": callback_url,
+        "openid.realm": realm,
+        "openid.identity": "http://specs.openid.net/auth/2.0/identifier_select",
+        "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
+    }
+    steam_login_url = f"{settings.STEAM_OPENID_URL}?{urllib.parse.urlencode(openid_params)}"
+    return RedirectResponse(steam_login_url, status_code = 307)
+
+
+@app.get("/api/auth/callback", name = "auth_callback") # This is named so that it can be referred to in login_with_steam
+async def auth_callback(
+    request: Request,
+    db: Session = Depends(database.get_db)
+):
+    """Receives OpenID payload from Steam (sent by React), validates it, and issues JWT to React."""
+    query_params = dict(request.query_params)
+    steam_id = await security.verify_steam_openid(query_params)
+
+    if not steam_id:
+        return RedirectResponse(f"{settings.CLIENT_ORIGIN_URL}?error=auth_failed")
+
+    # Get Steam user profile data to populate database
+    steam_profile = steam.fetch_steam_player_profile(steam_id)
+    username = steam_profile.get("personaname", f"SteamUser_{steam_id[-4:]}")
+    avatar_url = steam_profile.get("avatarfull", "")
+
+    # Find or create user in PostgreSQL
+    user = db.query(models.User).filter(models.User.steam_id == steam_id).first()
+    if not user:
+        user = models.User(
+            steam_id = steam_id,
+            username = username,
+            avatar_url = avatar_url,
+            settings = models.UserSettings(),
+        )
+        db.add(user)
+    else:
+        user.username = username
+        user.avatar_url = avatar_url
+
+    db.commit()
+    db.refresh(user)
+
+    # Create JWT token to send to React
+    token = security.create_access_token(user.id, user.steam_id)
+
+    # Redirect browser back to React with token attached in URL
+    return RedirectResponse(f"{settings.CLIENT_ORIGIN_URL}?token={token}", status_code=307)
+
+# endregion
 
 # region User Endpoints
 @app.get("/api/me", response_model = schemas.UserOut)

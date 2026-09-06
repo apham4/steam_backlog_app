@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     STEAM_FETCH_APP_DETAILS_URL: str = "https://store.steampowered.com/api/appdetails/"
     STEAM_FETCH_APP_REVIEWS_URL: str = "https://store.steampowered.com/api/appreviews/{app_id}"
     STEAM_OPENID_URL: str = "https://steamcommunity.com/openid/login"
+    STEAM_PROFILE_URL: str = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/"
     STEAM_API_KEY: str = ""
     STEAM_API_TIMEOUT_SECONDS: int = 10
     STEAM_API_MAX_FETCH_LIMIT: int = 10
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
     # FastAPI app
     APP_NAME: str = "Backlog Gamer API"
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
+    CLIENT_ORIGIN_URL: str = "http://127.0.0.1:5173"
     CORS_METHODS: list[str] = ["*"]
     CORS_HEADERS: list[str] = ["*"]
     JWT_SECRET_KEY: str = "fallback-bad-secret"

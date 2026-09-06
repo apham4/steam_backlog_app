@@ -13,6 +13,18 @@ from typing import Any, Dict, List, Optional
 from app import models
 from app.config import settings
 
+# region Profile Data
+async def fetch_steam_player_profile(steam_id: str) -> Dict[str, Any]:
+    """Get profile data to populate the database."""
+    url = settings.STEAM_PROFILE_URL
+    params = {"key": settings.STEAM_API_KEY, "steamids": steam_id}
+    async with httpx.AsyncClient(timeout = settings.STEAM_API_TIMEOUT_SECONDS) as client:
+        res = await client.get(url, params = params)
+        players = res.json().get("response", {}).get("players", [])
+        return players[0] if players else {}
+
+# endregion
+
 # region Library Owned Games
 async def fetch_owned_games(steam_id: str) -> List[Dict[str, Any]]:
     """Fetch the list of owned games for a given Steam ID using the Steam Web API."""

@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     STEAM_GET_OWNED_GAMES_URL: str = "https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/"
     STEAM_FETCH_APP_DETAILS_URL: str = "https://store.steampowered.com/api/appdetails/"
     STEAM_FETCH_APP_REVIEWS_URL: str = "https://store.steampowered.com/api/appreviews/{app_id}"
+    STEAM_OPENID_URL: str = "https://steamcommunity.com/openid/login"
     STEAM_API_KEY: str = ""
     STEAM_API_TIMEOUT_SECONDS: int = 10
     STEAM_API_MAX_FETCH_LIMIT: int = 10
@@ -21,6 +22,9 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
     CORS_METHODS: list[str] = ["*"]
     CORS_HEADERS: list[str] = ["*"]
+    JWT_SECRET_KEY: str = "fallback-bad-secret"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRATION_DAYS: int = 7
 
     # Default Rules
     GAME_CACHE_TTL_DAYS: int = 7

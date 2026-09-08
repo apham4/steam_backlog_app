@@ -192,6 +192,18 @@ def create_exclusion(
 
     return exclusion
 
+
+# 204 means no content
+@app.delete("/api/exclusions", status_code = 204)
+def clear_all_exclusions(
+    current_user: models.User = Depends(auth.get_current_user), 
+    db: Session = Depends(database.get_db),
+):
+    """Clear all exclusions for the authenticated user."""
+    db.query(models.Exclusion).filter(models.Exclusion.user_id == current_user.id).delete()
+    db.commit()
+    return None
+
 # endregion
 
 # region Steam Integration Endpoints

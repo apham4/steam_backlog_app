@@ -2,7 +2,7 @@
 
 import type { PayloadAction } from '@reduxjs/toolkit';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import type { Recommendation } from '../../types/api';
+import type { Recommendation, UserSettings } from '../../types/api';
 import { apiClient } from '../../api/client';
 import { config } from '../../config';
 
@@ -19,34 +19,49 @@ const initialState: RecommendationState = {
 }
 
 // Thunk = some chunk of delayed logic. Basically declaring an async function
-// This is for getting the next backlog recommendation
-export const fetchNextRecommendation = createAsyncThunk(
-    'recommendation/fetchNext', // name to call by 
-    async (_, { rejectWithValue }) => { // The _ is for params to pass in.
+
+// Async thunk when clicking the action button: Update user settings and get a new recommendation
+export const saveSettingsAndFetchRecommendation = createAsyncThunk(
+    'recommendation/saveAndFetch',
+    async (settings: UserSettings, { rejectWithValue }) => {
         try {
-            const response = await apiClient.get<Recommendation>(config.api.endpoints.getRecommendation);
-            return response.data;
+            // Update the settings
+            await apiClient.put(config.api.endpoints.settings, settings);
+            // Get new recommendation
+            const recResponse = await apiClient.get<Recommendation>(config.api.endpoints.getRecommendation);
+            return recResponse.data;
         } catch (error: any) {
-            return rejectWithValue(
-                error.response?.data?.detail || 'Failed to fetch recommendation.'
-            );
+            return rejectWithValue(error.response?.data?.detail || 'Failed to fetch recommendation.');
         }
     }
 );
 
 // Async thunk to skip a game (add to exclusion)
-export const skipRecommendation = createAsyncThunk(
-    'recommendation/skip',
-    async (appId: number, { dispatch, rejectWithValue }) => { // dispatch is for calling another async thunk i guess.
+export const skipAndFetchNewRecommendation = createAsyncThunk(
+    'recommendation/skipAndFetch',
+    async (
+        { appId, settings }: { appId: number; settings: UserSettings },
+        { dispatch, rejectWithValue }
+    ) => {
         try {
-            await apiClient.post(config.api.endpoints.addExclusion, { app_id: appId });
-            // Call to get the next recommendation immediately (what for?)
-            dispatch(fetchNextRecommendation());
+            await apiClient.post(config.api.endpoints.exclusion, { app_id: appId });
+            dispatch(saveSettingsAndFetchRecommendation(settings)).unwrap(); // With unwrap, if the inner api call fails, it will go to the catch block below. Without unwrap, it will report as success.
         } catch (error: any) {
-            return rejectWithValue(
-                error.response?.data?.detail || 'Failed to skip recommendation.'
-            );
-        };
+            return rejectWithValue(error.response?.data?.detail || 'Failed to skip recommendation and fetch a new one.');
+        }
+    }
+);
+
+// Async thunk to clear exclusions then get a new recommendation (in case all eligible games have been excluded)
+export const clearExclusionsAndFetchRecommendation = createAsyncThunk(
+    'recommendation/clearExclusionsAndFetch',
+    async (settings: UserSettings, { dispatch, rejectWithValue }) => {
+        try {
+            await apiClient.delete(config.api.endpoints.exclusion);
+            return dispatch(saveSettingsAndFetchRecommendation(settings)).unwrap() // With unwrap, if the inner api call fails, it will go to the catch block below. Without unwrap, it will report as success.
+        } catch (err: any) {
+            return rejectWithValue(err.response?.data?.detail || 'Failed to clear exclusions and fetch a new recommendation.');
+        }
     }
 );
 
@@ -65,20 +80,20 @@ export const recommendationSlice = createSlice({
     },
     extraReducers: (builder) => { // Listen and respond to thunk actions defined outside this slice, for async actions.
         builder.addCase(
-            fetchNextRecommendation.pending, (state) => {
+            saveSettingsAndFetchRecommendation.pending, (state) => {
                 state.status = 'loading';
                 state.error = null;
             }
         )
         .addCase(
             // When async thunk succeeds, redux dispatches an action with the payload containing the returned data.
-            fetchNextRecommendation.fulfilled, (state, action: PayloadAction<Recommendation>) => {
+            saveSettingsAndFetchRecommendation.fulfilled, (state, action: PayloadAction<Recommendation>) => {
                 state.status = 'succeeded';
                 state.currentRecommendation = action.payload;
             }
         )
         .addCase(
-            fetchNextRecommendation.rejected, (state, action) => {
+            saveSettingsAndFetchRecommendation.rejected, (state, action) => {
                 state.status = 'failed';
                 state.error = (action.payload as string) || 'Recommendation failed error message.';
             }

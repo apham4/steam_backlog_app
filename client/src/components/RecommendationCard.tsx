@@ -2,22 +2,15 @@
 
 import React from 'react';
 import type { Recommendation } from '../types/api';
-import { useAppDispatch } from '../app/hooks';
-import { skipRecommendation } from '../features/recommendation/recommendationSlice';
 import { config } from '../config';
 
 // properties, used to pass data from parent component to child component.
 interface Props {
     recommendation: Recommendation;
+    onSkip: (appId: number) => void;
 }
 
-export const RecommendationCard: React.FC<Props> = ({ recommendation }) => {
-    const dispatch = useAppDispatch();
-
-    const handleSkip = () => {
-        dispatch(skipRecommendation(recommendation.game_details.app_id));
-    };
-
+export const RecommendationCard: React.FC<Props> = ({ recommendation, onSkip }) => {
     const handleLaunchGameOnSteam = () => {
         // I can just run this with JavaScript from browser? That seems dangerous.
         window.location.href = config.steam.runUrl(recommendation.game_details.app_id);
@@ -112,7 +105,7 @@ export const RecommendationCard: React.FC<Props> = ({ recommendation }) => {
                         Trailer ↗
                     </a>
                     <button
-                        onClick={handleSkip}
+                        onClick={() => onSkip(recommendation.game_details.app_id)}
                         className="flex items-center justify-center py-2.5 px-4 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-900/50 text-red-300 font-semibold text-sm transition"
                     >
                         Next Game

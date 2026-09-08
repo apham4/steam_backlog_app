@@ -1,23 +1,36 @@
 // Main entry point for the React app.
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from './app/hooks';
-import { fetchNextRecommendation } from './features/recommendation/recommendationSlice';
+import { saveSettingsAndFetchRecommendation, skipAndFetchNewRecommendation, clearExclusionsAndFetchRecommendation } from './features/recommendation/recommendationSlice';
 import { fetchCurrentUser, setToken, logout } from './features/auth/authSlice';
 import { RecommendationCard } from './components/RecommendationCard';
+import { SettingsControls } from './components/SettingsControls';
+import type { UserSettings } from './types/api';
 import { config } from './config';
+
+const DEFAULT_SETTINGS: UserSettings = {
+  backlog_threshold_mins: config.settingsBounds.backlogThreshold.default,
+  recent_threshold_mins: config.settingsBounds.recentThreshold.default,
+  skip_cooldown_days: config.settingsBounds.skipCooldown.default,
+};
 
 function App() {
   const dispatch = useAppDispatch();
 
   // exploding state.recommendations. Alias for status because auth also has a status
-  const { currentRecommendation, status: recommendationStatus, error } = useAppSelector(
+  const { currentRecommendation, status: recommendationStatus, error: recError } = useAppSelector(
     (state) => state.recommendations
   );
 
   const { token, user, status: authStatus } = useAppSelector(
     (state) => state.auth
   );
+
+  // Settings state (local var)
+  // useState<T> returns a 2-element array: the state variable and the setter function
+  const [draftSettings, setDraftSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [settingsDirty, setSettingsDirty] = useState<boolean>(false);
 
   // 1. Detect incoming ?token= from Steam redirect
   // useEffect runs after every render. For side effects, redux state changing should not happen in here.
@@ -38,13 +51,14 @@ function App() {
     }
   }, [dispatch, token, user]);
 
-  // 3. Fetch recommendation once user profile is confirmed.
+  // 3. Initialize settings from user profile after authentication
   useEffect(() => {
-    if (user)
+    if (user?.settings)
     {
-      dispatch(fetchNextRecommendation());
+      setDraftSettings(user.settings);
+      setSettingsDirty(false);
     }
-  }, [user, dispatch]);
+  }, [user]);
 
   const handleLogin = () => {
     // Direct browser to backend OpenID route
@@ -55,16 +69,38 @@ function App() {
     dispatch(logout());
   };
 
+  const handleSettingsChanged = (updatedSettings: UserSettings) => {
+    setDraftSettings(updatedSettings);
+    setSettingsDirty(true);
+  };
+
+  const handleFetchRecommendation = () => {
+    dispatch(saveSettingsAndFetchRecommendation(draftSettings));
+    setSettingsDirty(false);
+  };
+
+  const handleClearExclusions = () => {
+    dispatch(clearExclusionsAndFetchRecommendation(draftSettings));
+    setSettingsDirty(false);
+  };
+
+  const handleSkip = (appId: number) => {
+    dispatch(skipAndFetchNewRecommendation({ appId, settings: draftSettings }));
+    setSettingsDirty(false);
+  }
+
+  const shouldShowActionButton = !currentRecommendation || settingsDirty || recommendationStatus === 'failed';
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between items-center p-6">
-      {/* Top Navbar */}
+      {/* Header Navbar */}
       <header className="w-full max-w-4xl flex justify-between items-center py-4 border-b border-slate-800/80">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white">Backlog Pick</h1>
           <p className="text-xs text-slate-500">Steam Library Recommendation Engine</p>
         </div>
 
-        {user ? (
+        {user && (
           <div className="flex items-center gap-3">
             <img
               src={user.avatar_url || ''}
@@ -79,17 +115,16 @@ function App() {
               Log out
             </button>
           </div>
-        ) : null}
+        )}
       </header>
 
-      {/* Main Content Area */}
-      <main className="w-full flex justify-center items-center my-auto">
+      {/* Main Content */}
+      <main className="w-full max-w-xl flex flex-col items-center gap-6 my-auto py-8">
         {!token ? (
-          /* Unauthenticated Landing State */
           <div className="text-center space-y-5 max-w-md p-8 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl">
             <h2 className="text-2xl font-bold text-white">Sign In to Continue</h2>
             <p className="text-sm text-slate-400">
-              Sign in with your Steam account so we can evaluate your playtime history, analyze recent genres, and find unplayed backlog gems.
+              Sign in with Steam to evaluate your backlog habits and find tailored recommendations.
             </p>
             <button
               onClick={handleLogin}
@@ -107,24 +142,44 @@ function App() {
             <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
             <p className="text-slate-400 text-sm">Authenticating with Steam...</p>
           </div>
-        ) : recommendationStatus === 'loading' ? (
-          <div className="flex flex-col items-center space-y-3">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-slate-400 text-sm">Finding your next game...</p>
-          </div>
-        ) : recommendationStatus === 'failed' ? (
-          <div className="bg-red-950/50 border border-red-800 text-red-200 p-6 rounded-xl max-w-md text-center space-y-3">
-            <p className="font-semibold text-sm">{error}</p>
-            <button
-              onClick={() => dispatch(fetchNextRecommendation())}
-              className="px-4 py-2 bg-red-800 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition"
-            >
-              Retry
-            </button>
-          </div>
-        ) : recommendationStatus === 'succeeded' && currentRecommendation ? (
-          <RecommendationCard recommendation={currentRecommendation} />
-        ) : null}
+        ) : (
+          <>
+            {/* Settings Controls */}
+            <SettingsControls
+              settings={draftSettings}
+              onSettingChanged={handleSettingsChanged}
+            />
+
+            {/* Centered Action Button */}
+            {shouldShowActionButton && (
+              <button
+                onClick={handleFetchRecommendation}
+                disabled={recommendationStatus === 'loading'}
+                className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white font-semibold text-base shadow-lg shadow-blue-900/30 transition duration-200"
+              >
+                {recommendationStatus === 'loading' ? 'Evaluating Library...' : 'Get Your Backlog Recommendation'}
+              </button>
+            )}
+
+            {/* Error Display */}
+            {recommendationStatus === 'failed' && recError && (
+              <div className="w-full bg-red-950/40 border border-red-800/80 text-red-200 p-5 rounded-xl text-center space-y-3">
+                <p className="text-sm font-medium">{recError}</p>
+                <button
+                  onClick={handleClearExclusions}
+                  className="px-4 py-2 bg-red-800 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition"
+                >
+                  Clear All Exclusions
+                </button>
+              </div>
+            )}
+
+            {/* Recommendation Card */}
+            {currentRecommendation && (
+              <RecommendationCard recommendation={currentRecommendation} onSkip={handleSkip} />
+            )}
+          </>
+        )}
       </main>
 
       {/* Footer */}

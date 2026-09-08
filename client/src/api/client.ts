@@ -9,3 +9,13 @@ export const apiClient = axios.create({
         'Content-Type': 'application/json',
     },
 });
+
+// Interceptor to attach JWT bearer token to outoging requests.
+apiClient.interceptors.request.use((reqConfig) => {
+    const token = localStorage.getItem(config.auth.tokenKey);
+    if (token && reqConfig.headers)
+    {
+        reqConfig.headers.Authorization = `Bearer ${token}`;
+    }
+    return reqConfig;
+});

@@ -19,7 +19,7 @@ app = FastAPI(title = settings.APP_NAME)
 
 app.add_middleware(
     CORSMiddleware, # CORS to allow React frontend to talk to FastAPI app
-    allow_origins = [settings.CLIENT_ORIGIN_URL],
+    allow_origins = settings.CORS_ORIGINS,
     allow_credentials = True,
     allow_methods = settings.CORS_METHODS,
     allow_headers = settings.CORS_HEADERS,
@@ -63,7 +63,7 @@ async def auth_callback(
         return RedirectResponse(f"{settings.CLIENT_ORIGIN_URL}?error=auth_failed")
 
     # Get Steam user profile data to populate database
-    steam_profile = steam.fetch_steam_player_profile(steam_id)
+    steam_profile = await steam.fetch_steam_player_profile(steam_id)
     username = steam_profile.get("personaname", f"SteamUser_{steam_id[-4:]}")
     avatar_url = steam_profile.get("avatarfull", "")
 

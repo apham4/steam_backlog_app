@@ -27,7 +27,7 @@ def get_current_user(
         raise HTTPException(
             status_code = status.HTTP_401_UNAUTHORIZED,
             detail = "Authentication token required.",
-            header = {"WWW-Authenticate": "Bearer"},
+            headers = {"WWW-Authenticate": "Bearer"},
         )
 
     # Authorization header is present. If the key is incorrect or expired, decode_access_token returns none, so it needs a new one.
@@ -36,7 +36,7 @@ def get_current_user(
         raise HTTPException(
             status_code = status.HTTP_401_UNAUTHORIZED,
             detail = "Invalid or expired authentication token.",
-            header = {"WWW-Authenticate": "Bearer"},
+            headers = {"WWW-Authenticate": "Bearer"},
         )
 
     # Eager load the UserSettings associated with this user (done in 1 query).
@@ -47,7 +47,7 @@ def get_current_user(
         raise HTTPException(
             status_code = status.HTTP_401_UNAUTHORIZED,
             detail = "User account not found.",
-            header = {"WWW-Authenticate": "Bearer"},
+            headers = {"WWW-Authenticate": "Bearer"},
         )
     
     return user

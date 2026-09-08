@@ -71,6 +71,7 @@ export const recommendationSlice = createSlice({
             }
         )
         .addCase(
+            // When async thunk succeeds, redux dispatches an action with the payload containing the returned data.
             fetchNextRecommendation.fulfilled, (state, action: PayloadAction<Recommendation>) => {
                 state.status = 'succeeded';
                 state.currentRecommendation = action.payload;

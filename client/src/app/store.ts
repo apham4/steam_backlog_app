@@ -5,6 +5,7 @@
 
 import { configureStore } from '@reduxjs/toolkit';
 import recommendationReducer from '../features/recommendation/recommendationSlice'; // This is from the export default recommendationSlice.reducer line.
+import authReducer from '../features/auth/authSlice';
 
 // store instance to be used in other spots.
 // configureStore defines the top-level keys of state tree.
@@ -12,6 +13,7 @@ import recommendationReducer from '../features/recommendation/recommendationSlic
 export const store = configureStore({
     reducer: {
         recommendations: recommendationReducer,
+        auth: authReducer,
     },
 });
 

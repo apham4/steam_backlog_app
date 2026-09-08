@@ -20,8 +20,8 @@ class Settings(BaseSettings):
 
     # FastAPI app
     APP_NAME: str = "Backlog Gamer API"
-    CORS_ORIGINS: list[str] = ["http://localhost:5173"]
-    CLIENT_ORIGIN_URL: str = "http://127.0.0.1:5173"
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    CLIENT_ORIGIN_URL: str = "http://localhost:5173"
     CORS_METHODS: list[str] = ["*"]
     CORS_HEADERS: list[str] = ["*"]
     JWT_SECRET_KEY: str = "fallback-bad-secret"

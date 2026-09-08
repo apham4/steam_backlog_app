@@ -256,7 +256,7 @@ async def get_next_recommendation(
     exclusions: List[models.Exclusion] = get_exclusions_with_cleanup(background_tasks, current_user, db)
     library_details: steam.GameLibraryDetails = await steam.get_game_library_details(current_user)
 
-    recommendation_data: recommender.RecommendationData = await recommender.get_top_recommendation(library_details, exclusions, db)
+    recommendation_data: recommender.RecommendationData = await recommender.get_top_recommendation(current_user, library_details, exclusions, db)
     if not recommendation_data:
         raise HTTPException(
             status_code = 404, detail = "Could not generate a recommendation. Make sure backlog has at least one game."

@@ -2,6 +2,7 @@
 
 import urllib.parse
 from dataclasses import dataclass
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional, Set
 
@@ -81,21 +82,36 @@ class RecommendationData:
 
 
 async def get_top_recommendation(
+    current_user: models.User,
     library_details: steam.GameLibraryDetails,
     exclusions: List[models.Exclusion],
     db: Session,
 ) -> Optional[RecommendationData]:
     """Main function to get a singular backlog game recommendation given the parameters."""
 
-    if not library_details:
-        return None
+    # User has no games.
+    if not library_details or library_details.total_owned == 0:
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND,
+            detail = "You have no games in your Steam library.", # TODO: maybe config the error messages?
+        )
+
+    # User has games but none under the backlog playtime threshold
+    if not library_details.backlog or len(library_details.backlog) == 0:
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND,
+            detail = f"You have no backlog game with a playtime of under {current_user.settings.backlog_threshold_mins} minutes in your Steam library." # TODO: maybe config the error messages?
+        )
 
     # Filter out exclusions from backlog
     excluded_ids: Set[int] = {exclusion.app_id for exclusion in exclusions} if exclusions else set()
     eligible_backlog = [game for game in library_details.backlog if game["appid"] not in excluded_ids]
 
     if not eligible_backlog:
-        return None
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND,
+            detail = "You have gone through your entire backlog recommendation.",
+        )
 
     # Batch fetch recently played games
     recent_app_ids = [game["appid"] for game in library_details.recently_played]

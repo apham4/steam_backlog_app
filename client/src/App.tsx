@@ -8,6 +8,7 @@ import { RecommendationCard } from './components/RecommendationCard';
 import { SettingsControls } from './components/SettingsControls';
 import type { UserSettings } from './types/api';
 import { config } from './config';
+import { ERROR_MESSAGES } from './types/errors';
 
 const DEFAULT_SETTINGS: UserSettings = {
   backlog_threshold_mins: config.settingsBounds.backlogThreshold.default,
@@ -90,6 +91,7 @@ function App() {
   }
 
   const shouldShowActionButton = !currentRecommendation || settingsDirty || recommendationStatus === 'failed';
+  const errorMessage = recError ? ERROR_MESSAGES[recError.code]?.(recError.params) || 'An unexpected error occured.' : null;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between items-center p-6">
@@ -164,7 +166,7 @@ function App() {
             {/* Error Display */}
             {recommendationStatus === 'failed' && recError && (
               <div className="w-full bg-red-950/40 border border-red-800/80 text-red-200 p-5 rounded-xl text-center space-y-3">
-                <p className="text-sm font-medium">{recError}</p>
+                <p className="text-sm font-medium">{errorMessage}</p>
                 <button
                   onClick={handleClearExclusions}
                   className="px-4 py-2 bg-red-800 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition"

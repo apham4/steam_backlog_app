@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from app import models, steam
 from app.config import settings
+from app.errors import RecommendationErrorCode
 
 def build_genre_weights(
     recent_with_playtime: List[Dict[str, Any]], 
@@ -93,14 +94,17 @@ async def get_top_recommendation(
     if not library_details or library_details.total_owned == 0:
         raise HTTPException(
             status_code = status.HTTP_404_NOT_FOUND,
-            detail = "You have no games in your Steam library.", # TODO: maybe config the error messages?
+            detail = {"code": RecommendationErrorCode.NO_GAMES.value},
         )
 
     # User has games but none under the backlog playtime threshold
     if not library_details.backlog or len(library_details.backlog) == 0:
         raise HTTPException(
             status_code = status.HTTP_404_NOT_FOUND,
-            detail = f"You have no backlog game with a playtime of under {current_user.settings.backlog_threshold_mins} minutes in your Steam library." # TODO: maybe config the error messages?
+            detail={
+                "code": RecommendationErrorCode.NO_QUALIFYING_BACKLOG.value,
+                "params": {"threshold": current_user.settings.backlog_threshold_mins},
+            },
         )
 
     # Filter out exclusions from backlog
@@ -110,7 +114,7 @@ async def get_top_recommendation(
     if not eligible_backlog:
         raise HTTPException(
             status_code = status.HTTP_404_NOT_FOUND,
-            detail = "You have gone through your entire backlog recommendation.",
+            detail = {"code": RecommendationErrorCode.ALL_EXCLUDED.value},
         )
 
     # Batch fetch recently played games

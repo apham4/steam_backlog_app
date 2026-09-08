@@ -5,11 +5,12 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import type { Recommendation, UserSettings } from '../../types/api';
 import { apiClient } from '../../api/client';
 import { config } from '../../config';
+import type { ApiErrorDetail } from '../../types/errors';
 
 interface RecommendationState {
     currentRecommendation: Recommendation | null;
     status: 'idle' | 'loading' | 'succeeded' | 'failed';
-    error: string | null;
+    error: ApiErrorDetail | null;
 }
 
 const initialState: RecommendationState = {
@@ -19,7 +20,6 @@ const initialState: RecommendationState = {
 }
 
 // Thunk = some chunk of delayed logic. Basically declaring an async function
-
 // Async thunk when clicking the action button: Update user settings and get a new recommendation
 export const saveSettingsAndFetchRecommendation = createAsyncThunk(
     'recommendation/saveAndFetch',
@@ -95,7 +95,7 @@ export const recommendationSlice = createSlice({
         .addCase(
             saveSettingsAndFetchRecommendation.rejected, (state, action) => {
                 state.status = 'failed';
-                state.error = (action.payload as string) || 'Recommendation failed error message.';
+                state.error = (action.payload as ApiErrorDetail) ?? {code: 'FETCH_FAILED' };
             }
         );
     },

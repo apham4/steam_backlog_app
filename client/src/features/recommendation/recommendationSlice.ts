@@ -1,7 +1,7 @@
 // This is for fetching a recommendation and submitting exclusions.
 
 import type { PayloadAction } from '@reduxjs/toolkit';
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, isAnyOf } from '@reduxjs/toolkit';
 import type { Recommendation, UserSettings } from '../../types/api';
 import { apiClient } from '../../api/client';
 import { config } from '../../config';
@@ -45,7 +45,7 @@ export const skipAndFetchNewRecommendation = createAsyncThunk(
     ) => {
         try {
             await apiClient.post(config.api.endpoints.exclusion, { app_id: appId });
-            dispatch(saveSettingsAndFetchRecommendation(settings)).unwrap(); // With unwrap, if the inner api call fails, it will go to the catch block below. Without unwrap, it will report as success.
+            return dispatch(saveSettingsAndFetchRecommendation(settings)).unwrap(); // With unwrap, if the inner api call fails, it will go to the catch block below. Without unwrap, it will report as success.
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.detail || 'Failed to skip recommendation and fetch a new one.');
         }
@@ -79,25 +79,41 @@ export const recommendationSlice = createSlice({
         },
     },
     extraReducers: (builder) => { // Listen and respond to thunk actions defined outside this slice, for async actions.
-        builder.addCase(
-            saveSettingsAndFetchRecommendation.pending, (state) => {
+        builder.addMatcher(
+            isAnyOf(
+                saveSettingsAndFetchRecommendation.pending,
+                skipAndFetchNewRecommendation.pending,
+                clearExclusionsAndFetchRecommendation.pending
+            ),
+            (state) => {
                 state.status = 'loading';
+                state.currentRecommendation = null; // To hide the recommendation card
                 state.error = null;
             }
         )
-        .addCase(
-            // When async thunk succeeds, redux dispatches an action with the payload containing the returned data.
-            saveSettingsAndFetchRecommendation.fulfilled, (state, action: PayloadAction<Recommendation>) => {
+        .addMatcher(
+            isAnyOf(
+                saveSettingsAndFetchRecommendation.fulfilled,
+                skipAndFetchNewRecommendation.fulfilled,
+                clearExclusionsAndFetchRecommendation.fulfilled
+            ),
+            (state, action: PayloadAction<Recommendation>) => {
                 state.status = 'succeeded';
                 state.currentRecommendation = action.payload;
             }
         )
-        .addCase(
-            saveSettingsAndFetchRecommendation.rejected, (state, action) => {
+        .addMatcher(
+            isAnyOf(
+                saveSettingsAndFetchRecommendation.rejected,
+                skipAndFetchNewRecommendation.rejected,
+                clearExclusionsAndFetchRecommendation.rejected
+            ),
+            (state, action) => {
                 state.status = 'failed';
+                state.currentRecommendation = null;
                 state.error = (action.payload as ApiErrorDetail) ?? {code: 'FETCH_FAILED' };
             }
-        );
+        )
     },
 });
 

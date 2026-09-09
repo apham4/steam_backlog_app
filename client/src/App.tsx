@@ -164,9 +164,16 @@ function App() {
               <button
                 onClick={handleFetchRecommendation}
                 disabled={recommendationStatus === 'loading'}
-                className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white font-semibold text-base shadow-lg shadow-blue-900/30 transition duration-200"
+                className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900/60 disabled:text-blue-200/70 disabled:cursor-not-allowed text-white font-semibold text-base shadow-lg shadow-blue-900/30 transition duration-200 flex items-center justify-center gap-2.5"
               >
-                {recommendationStatus === 'loading' ? 'Evaluating Library...' : 'Get Your Backlog Recommendation'}
+                {recommendationStatus === 'loading' ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Evaluating Library...</span>
+                  </>
+                ) : (
+                  'Get Your Backlog Recommendation'
+                )}
               </button>
             )}
 

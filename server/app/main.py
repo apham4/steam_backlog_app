@@ -12,9 +12,6 @@ from app import auth, database, models, recommender, schemas, security, steam
 from app.config import settings
 from app.database import Base, engine
 
-# Create tables in PostgreSQL on startup (CREATE TABLE IF NOT EXISTS). In production use Alembic migrations.
-Base.metadata.create_all(bind = engine)
-
 app = FastAPI(title = settings.APP_NAME)
 
 app.add_middleware(

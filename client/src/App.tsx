@@ -9,6 +9,7 @@ import { SettingsControls } from './components/SettingsControls';
 import type { UserSettings } from './types/api';
 import { config } from './config';
 import { ERROR_MESSAGES } from './types/errors';
+import { FaSteam } from "react-icons/fa";
 
 const DEFAULT_SETTINGS: UserSettings = {
   backlog_threshold_mins: config.settingsBounds.backlogThreshold.default,
@@ -61,6 +62,15 @@ function App() {
     }
   }, [user]);
 
+  // Update page title
+  useEffect(() => {
+    if (user) {
+      document.title = user.username + ' - Backlog Game Rec';
+    } else {
+      document.title = 'Backlog Game Rec';
+    }
+  }, [user]);
+
   const handleLogin = () => {
     // Direct browser to backend OpenID route
     window.location.href = config.api.baseUrl + config.api.endpoints.auth;
@@ -97,9 +107,9 @@ function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between items-center p-6">
       {/* Header Navbar */}
       <header className="w-full max-w-4xl flex justify-between items-center py-4 border-b border-slate-800/80">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-white">Backlog Pick</h1>
-          <p className="text-xs text-slate-500">Steam Library Recommendation Engine</p>
+        <div className="text-left">
+          <h1 className="text-xl font-bold tracking-tight text-white">Backlog Game Rec</h1>
+          <p className="text-xs text-slate-500">Steam Backlog Game Recommendation Engine</p>
         </div>
 
         {user && (
@@ -130,13 +140,10 @@ function App() {
             </p>
             <button
               onClick={handleLogin}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-[#171a21] hover:bg-[#2a475e] text-white font-medium text-sm rounded-xl border border-slate-700 transition shadow-lg"
+              className="inline-flex items-center justify-center gap-3 px-6 py-3 bg-[#171a21] hover:bg-[#2a475e] text-white font-medium text-sm rounded-xl border border-slate-700 hover:border-slate-500 transition duration-200 shadow-lg cursor-pointer"
             >
-              <img
-                src="https://community.cloudflare.steamstatic.com/public/images/signinthroughsteam/sits_01.png" // TODO: Probably replace this with something better looking
-                alt="Sign in through Steam"
-                className="h-8"
-              />
+              <FaSteam />
+              <span>Sign in through Steam</span>
             </button>
           </div>
         ) : authStatus === 'loading' ? (
@@ -186,7 +193,7 @@ function App() {
 
       {/* Footer */}
       <footer className="text-xs text-slate-600 my-4">
-        Steam Backlog App &bull; Powered by FastAPI & React
+        Backlog Game Rec &bull; Powered by FastAPI & React
       </footer>
     </div>
   );

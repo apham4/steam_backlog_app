@@ -10,7 +10,6 @@ from typing import List
 
 from app import auth, database, models, recommender, schemas, security, steam
 from app.config import settings
-from app.database import Base, engine
 
 app = FastAPI(title = settings.APP_NAME)
 
@@ -22,6 +21,15 @@ app.add_middleware(
     allow_headers = settings.CORS_HEADERS,
 )
 
+# region Health Check Endpoint
+@app.get("/api/health")
+def health_check():
+    """Basic health check endpoint to verify that the backend is running."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+# endregion
 
 # region Steam Authentication Endpoints
 @app.get("/api/auth/login")
